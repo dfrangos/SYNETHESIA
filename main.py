@@ -7,7 +7,7 @@ import matplotlib.colors as colors
 import matplotlib.patches as patches
 
 
-np.random.seed(4012345)
+np.random.seed(4846)
 
 
 # Creating the Cells Properties
@@ -247,7 +247,7 @@ class Cell:
         self.Death_Count_Rate += self.Death_Count_Rate
 
     def Update_Energy_Level(self):
-        if abs(self.DX_energy) > 0 or abs(self.DY_energy) > 1:
+        if abs(self.DX_energy) > 0 or abs(self.DY_energy) > 0:
             self.Energy_Level += 1
 
         if self.Energy_Level > self.energy_preference:
@@ -261,11 +261,10 @@ class Cell:
 def Create_Cells(N, SIZE):
     Cell_List = []
     for i in range(N):
-        Cell_List.append(
-            Cell(np.random.randint(0, high=SIZE), np.random.randint(0, high=SIZE), 1, 1))
         # Cell_List.append(
-        #     Cell(np.random.randint(0, high=SIZE), np.random.randint(0, high=SIZE), np.random.randint(0, high=3),
-        #          np.random.randint(0, high=3)))
+        #     Cell(np.random.randint(0, high=SIZE), np.random.randint(0, high=SIZE), 1, 1))
+        Cell_List.append(
+            Cell(np.random.randint(0, high=SIZE), np.random.randint(0, high=SIZE), np.random.rand()+1, np.random.rand()+1))
     return Cell_List
 
 
@@ -284,19 +283,19 @@ def Create_Energy_Grid(SIZE):
     Energy_Grid[X0, Y0] = 25
     return Energy_Grid
 
-grid_size = 50
+grid_size = 15
 tf = 200
 
 # The number of Cells that we want in the beginning of the sim
-N = 10
+N = 5
 
 Cell_List = Create_Cells(N, grid_size)
 Energy_Grid = Create_Energy_Grid(grid_size)
-Bar_List = np.zeros((N,tf))
+Death_Count_List = np.zeros((N, tf))
 Energy_List = np.zeros((N,tf))
 for i in range(tf):
     Grid = Create_Grid(grid_size)
-    a = 1
+
     for j in range(N):
         if Cell_List[j].Death_Count > 0:
             Cell_List[j].Update_Background_Position(Grid)
@@ -307,11 +306,23 @@ for i in range(tf):
             Cell_List[j].Death_Tick()
         else:
             Cell_List[j].Add_History()
-        Bar_List[j,i] = Cell_List[j].Death_Count
+        Death_Count_List[j, i] = Cell_List[j].Death_Count
         Energy_List[j,i] = Cell_List[j].Energy_Level
 
     print(i)
 
+
+
+
+
+
+#THIS IS ALL ANIMATION AND PLOTTING
+
+
+
+
+
+#_____________________________________________________________
 # Doing the Animation
 fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1)
 fig.tight_layout(pad=1.0)
@@ -368,6 +379,15 @@ for i in range(N):
     energy_list.append(g)
 
 # Create the animation using the update function
-anim = animation.FuncAnimation(fig, update, fargs=(line_list, Cell_List, bar_list, Bar_List, energy_list, Energy_List), frames=tf, repeat=True)
+anim = animation.FuncAnimation(fig, update, fargs=(line_list, Cell_List, bar_list, Death_Count_List, energy_list, Energy_List), interval=5, frames=tf, repeat=True, cache_frame_data=False)
 # Show the animation
+
+# for j in range(N):
+#     ax1.plot(Cell_List[j].X_History,Cell_List[j].Y_History, marker='*')
+# for i in range(tf):
+#     for j in range(N):
+#         ax1.plot(Cell_List[j].X_History[:i],Cell_List[j].Y_History[:i])
+#     time.sleep(.1)
+#     #plt.clf()
 plt.show()
+
