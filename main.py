@@ -1,38 +1,48 @@
-import time
-import math
 import numpy as np
+import random
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import matplotlib.colors as colors
 import matplotlib.patches as patches
 
-
-np.random.seed(4846)
-
-
-# Creating the Cells Properties
+# _____________________________________________________________________________________________________________________
+# USER DEFINED VARIABLES
+# The random Seed.
+np.random.seed(48467)
+# This is the size of the universe.
+Grid_Size = 12
+# This is the amount of time the universe will exist for.
+TF = 300
+# The number of Cells that we want in the beginning of the simulation. This can change as the simulation progresses.
+N = 2
+# _____________________________________________________________________________________________________________________
+# Creating the Cells Properties. For now some of these are also user defined.
 class Cell:
-    def __init__(self, X0, Y0, e_scale, b_scale):
-        self.X = X0
+    def __init__(self, X0, Y0, e_scale, b_scale, memory):
+        self.X = X0                          # The Global x and y coordinates
         self.Y = Y0
-        self.RX = 0
+        self.RX = 0                          # The coordinates relative to the possible moves array
         self.RY = 0
-        self.DX_background = 0
+        self.DX_background = 0               # The Change in x and y coordinates to perform the move related to the QFPM
         self.DY_background = 0
-        self.DX_energy = 0
+        self.DX_energy = 0                   # The Change in x and y coordinates to perform the move related to the Sensory model
         self.DY_energy = 0
-        self.X_History = np.array([self.X])
+        self.X_History = np.array([self.X])  # A array that is composed of all the global x and y coordinates
         self.Y_History = np.array([self.Y])
-        self.Death_Count = 1000
-        self.Death_Count_Rate = 1
-        self.Energy_Level = 5
-        self.energy_scale = e_scale
-        self.background_scale = b_scale
-        self.energy_preference = 10
+        self.Death_Count = 1000              # The Death count clock. All cells have it and it never stops ticking
+        self.Death_Count_Rate = 1            # The minimum rate at which it ticks. Regardless of what the cell is doing.
+        self.Energy_Level = 5                # This is the starting energy level of every cell that is created
+        self.background_scale = b_scale      # The multiplicative factor that influences the weight of the QFPM based movement
+        self.energy_scale = e_scale          # The multiplicative factor that influences the weight of the Sensory Model based movement
+        self.energy_preference = 10          # The preferred value that all cells want their level to be at.
+        self.memory_bank = memory            # when the cell is created it will have a memory bank filled with 'memory'. Which, for now, will be nothing.
 
     def Death_Tick(self):
+        # When this is called the Death Count will reduce for that cell by the Death count rate amount.
+        # Keep in mind these functions are still within the class.
         self.Death_Count -= self.Death_Count_Rate
 
+    # When this is called the
     def Update_Background_Position(self, Grid):
         # know what the dimensions of the universe are.
         grid_length = Grid.shape[0]
@@ -123,15 +133,13 @@ class Cell:
             possible_moves = Grid[self.X - 1:self.X + 2, self.Y - 1:self.Y + 2]
             possible_moves = possible_moves / np.sum(possible_moves)
 
-        Index_Max = np.where(possible_moves == np.max(possible_moves))
-        if np.size(Index_Max) > 2:
-            IX = Index_Max[0][0]
-            IY = Index_Max[1][0]
-        else:
-            IX = Index_Max[0]
-            IY = Index_Max[1]
-        self.DX_background = self.background_scale * (IX - self.RX)
-        self.DY_background = self.background_scale * (IY - self.RY)
+        weights=np.ravel(possible_moves) # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+        order=np.arange(0,weights.size,1) # This is created the array which contains the order/indexing of the values of the pos move array
+        choice=random.choices(order,weights=weights) # This selects a random value from order based off of the weight
+        coordinates=np.unravel_index(choice,possible_moves.shape) # returns the unraveled index of the choice.
+        IX,IY=coordinates[0],coordinates[1] # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
+        self.DX_background = (IX - self.RX)  # The change in coordinates that cell needs to make is the difference between the target location (IX) and the current location of where the cell is in the relative frame. (RX)
+        self.DY_background = (IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame. (RY)
 
     def Update_Energy_Position(self, energy_grid):
         # know what the dimensions of the universe are.
@@ -255,50 +263,59 @@ class Cell:
         else:
             self.energy_scale = 1
 
-# _____________________________________________________
+    def Update_Memory(self, energy_grid):
+        already_known=False
+        if energy_grid[self.X, self.Y]>0:
+            for i in range(self.memory_bank.shape[0]):
+                if self.memory_bank[i,0]>0:
+                    if self.memory_bank[i,1]==self.X and self.memory_bank[i,2]== self.Y:
+                        already_known=True
+            if already_known==False:
+                self.memory_bank=np.roll(self.memory_bank, 1,axis=0)
+                self.memory_bank[0,0],self.memory_bank[0,1],self.memory_bank[0,2]=energy_grid[self.X, self.Y],self.X,self.Y
+
+# ________________________________________________________________________________________________________
+
+# FUNCTIONS
 
 # Creates an N number of cells. Takes in information about the grid which is 'SIZE'
-def Create_Cells(N, SIZE):
+def Create_Cells(n, grid_size):
     Cell_List = []
     for i in range(N):
-        # Cell_List.append(
-        #     Cell(np.random.randint(0, high=SIZE), np.random.randint(0, high=SIZE), 1, 1))
-        Cell_List.append(
-            Cell(np.random.randint(0, high=SIZE), np.random.randint(0, high=SIZE), np.random.rand()+1, np.random.rand()+1))
+        x,y= np.random.randint(0, high=grid_size), np.random.randint(0, high=grid_size)
+        e_scale,b_scale= np.random.rand()+1, np.random.rand()+1
+        memory_bank= np.zeros((10, 3))
+        Cell_List.append(Cell(x, y, e_scale, b_scale,memory_bank))
     return Cell_List
 
 
-# Creating the Space the Cells will move within, and the free will feild.
-def Create_Grid(SIZE):
-    Grid = np.random.randint(0, high=10, size=(SIZE, SIZE))
+# Creating the Space the Cells will move within, and the free will field.
+def Create_Grid(grid_size):
+    Grid = np.random.randint(0, high=10, size=(grid_size, grid_size))
     return Grid
 
-
-def Create_Energy_Grid(SIZE):
-    Energy_Grid = np.zeros((SIZE, SIZE))
-    X0 = int(SIZE / 2)
-    Y0 = int(SIZE / 2)
+# Creates an array of an energy grid and defines its location and its values
+def Create_Energy_Grid(grid_size):
+    Energy_Grid = np.zeros((grid_size, grid_size))
+    X0 = int(grid_size / 2)
+    Y0 = int(grid_size / 2)
     Energy_Grid[X0 - 2:X0 + 3, Y0 - 2:Y0 + 3] = 5
     Energy_Grid[X0 - 1:X0 + 2, Y0 - 1:Y0 + 2] = 10
     Energy_Grid[X0, Y0] = 25
     return Energy_Grid
 
-grid_size = 15
-tf = 200
 
-# The number of Cells that we want in the beginning of the sim
-N = 5
 
-Cell_List = Create_Cells(N, grid_size)
-Energy_Grid = Create_Energy_Grid(grid_size)
-Death_Count_List = np.zeros((N, tf))
-Energy_List = np.zeros((N,tf))
-for i in range(tf):
-    Grid = Create_Grid(grid_size)
-
+Cell_List = Create_Cells(N, Grid_Size)
+Energy_Grid = Create_Energy_Grid(Grid_Size)
+Death_Count_List = np.zeros((N, TF))
+Energy_List = np.zeros((N,TF))
+for i in range(TF):
+    Grid = Create_Grid(Grid_Size)
     for j in range(N):
         if Cell_List[j].Death_Count > 0:
             Cell_List[j].Update_Background_Position(Grid)
+            Cell_List[j].Update_Memory(Energy_Grid)
             Cell_List[j].Update_Energy_Position(Energy_Grid)
             Cell_List[j].Update_Energy_Level()
             Cell_List[j].Update_Total_Position()
@@ -308,38 +325,44 @@ for i in range(tf):
             Cell_List[j].Add_History()
         Death_Count_List[j, i] = Cell_List[j].Death_Count
         Energy_List[j,i] = Cell_List[j].Energy_Level
-
     print(i)
 
 
 
+# THIS IS ALL ANIMATION AND PLOTTING
 
-
-
-#THIS IS ALL ANIMATION AND PLOTTING
-
-
-
-
-
-#_____________________________________________________________
+# ________________________________________________________________________________________________________
 # Doing the Animation
-fig, (ax1, ax2, ax3) = plt.subplots(nrows=3, ncols=1)
-fig.tight_layout(pad=1.0)
+idx_cells = np.asarray([i for i in range(N)])
+fig, axd = plt.subplot_mosaic([['upper left', 'grid'],
+                               ['lower left', 'grid']],
+                              figsize=(5.5, 3.5))
+plt.tight_layout(pad=2)
+ax1, ax2, ax3 = axd["grid"], axd["upper left"], axd["lower left"]
 # Set the axis limits
-ax1.set_xlim(-1, grid_size)
-ax1.set_ylim(-1, grid_size)
+ax1.set_xlim(-1, Grid_Size)
+ax1.set_ylim(-1, Grid_Size)
 ax2.set_xlim(-1, N)
-ax2.set_ylim(0, 1000)
+ax2.set_ylim(0, np.max(Death_Count_List))
 ax3.set_xlim(-1, N)
-ax3.set_ylim(0, 12)
+ax3.set_ylim(0, np.max(Energy_List))
+ax3.set_xticks(idx_cells)
+ax2.set_xticks(idx_cells)
+prefs = []
+for i in range(N):
+    prefs.append(str(Cell_List[i].energy_preference))
+xlabels = []
+for i in range(N):
+    xlabels.append(f'E pref = {prefs[i]}')
+ax3.set_xticklabels(xlabels, rotation=50)
+
 ncol = [c for c in colors.get_named_colors_mapping()]
 
-rect1 = patches.Rectangle((int(grid_size/2)-2, int(grid_size/2)-2), 5, 5, color='gold')
+rect1 = patches.Rectangle((int(Grid_Size/2)-2, int(Grid_Size/2)-2), 5, 5, color='gold')
 ax1.add_patch(rect1)
-rect2 = patches.Rectangle((int(grid_size/2)-1, int(grid_size/2)-1), 3, 3, color='orange')
+rect2 = patches.Rectangle((int(Grid_Size/2)-1, int(Grid_Size/2)-1), 3, 3, color='orange')
 ax1.add_patch(rect2)
-rect3 = patches.Rectangle((int(grid_size/2), int(grid_size/2)), 1, 1, color='darkorange')
+rect3 = patches.Rectangle((int(Grid_Size/2), int(Grid_Size/2)), 1, 1, color='darkorange')
 ax1.add_patch(rect3)
 ax1.grid(which="both")
 ax1.minorticks_on()
@@ -379,15 +402,11 @@ for i in range(N):
     energy_list.append(g)
 
 # Create the animation using the update function
-anim = animation.FuncAnimation(fig, update, fargs=(line_list, Cell_List, bar_list, Death_Count_List, energy_list, Energy_List), interval=5, frames=tf, repeat=True, cache_frame_data=False)
+anim = animation.FuncAnimation(fig, update, fargs=(line_list, Cell_List, bar_list, Death_Count_List, energy_list, Energy_List), interval=5, frames=TF, repeat=True, cache_frame_data=False)
 # Show the animation
 
 # for j in range(N):
 #     ax1.plot(Cell_List[j].X_History,Cell_List[j].Y_History, marker='*')
-# for i in range(tf):
-#     for j in range(N):
-#         ax1.plot(Cell_List[j].X_History[:i],Cell_List[j].Y_History[:i])
-#     time.sleep(.1)
-#     #plt.clf()
+
 plt.show()
 
