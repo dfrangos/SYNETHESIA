@@ -43,20 +43,19 @@ class Cell:
         self.X_History = np.array([self.X])
         self.Y_History = np.array([self.Y])
 
-        self.death_count = 1000  # The Death count clock. All cells have it and it never stops ticking
+        self.death_count = 500  # The Death count clock. All cells have it and it never stops ticking
         self.death_count_rate = 1  # The minimum rate at which it ticks. Regardless of what the cell is doing.
-
-        # The Change in x and y coordinates to perform the move related to the QFPM
 
         self.DX_energy = 0  # The Change in x and y coordinates to perform the move related to the Sensory model
         self.DY_energy = 0
-
         self.energy_level = 5  # This is the starting energy level of every cell that is created
         self.energy_preference = 10  # The preferred value that all cells want their level to be at.
         self.energy_experience = False
         self.energy_starved = False
         self.energy_memory = False
 
+        self.DX_temperature = 0  # The Change in x and y coordinates to perform the move related to the Sensory model
+        self.DY_temperature = 0
         self.temperature_level = 5  # This is the starting energy level of every cell that is created
         self.temperature_preference = 5
         self.temperature_experience = False
@@ -70,7 +69,10 @@ class Cell:
     def Death_Tick(self):
         # When this is called the Death Count will reduce for that cell by the Death count rate amount.
         # Keep in mind these functions are still within the class.
-        self.death_count -= self.death_count_rate
+        if self.energy_experience or self.temperature_experience:
+            self.death_count -= self.death_count_rate * .2
+        else:
+            self.death_count -= self.death_count_rate
 
     # When this is called the
     def Update_Background_Position(self, background_grid):
