@@ -8,23 +8,26 @@ import matplotlib.patches as patches
 # _____________________________________________________________________________________________________________________
 # USER DEFINED VARIABLES
 # The random Seed.
-np.random.seed(48467)
+np.random.seed(484657)
 random.seed(10)
 # This is the size of the universe.
-Grid_Size = 25
+Grid_Size = 30
 # This is the amount of time the universe will exist for.
 TF = 600
 # The number of Cells that we want in the beginning of the simulation. This can change as the simulation progresses.
 N = 5
 
 # These are the decay rates experienced for all cells no matter what their personal properties are. This is universal
+upper_sensory_cap= 10
+lower_sensory_cap=0
+
 energy_decay_rate = .05
-energy_limit_upper = 9
-energy_limit_lower = 2
+energy_upper_harm = 8
+energy_lower_harm = 2
 
 temperature_decay_rate = .05
-temperature_limit_upper = 9
-temperature_limit_lower = 2
+temperature_upper_harm = 8
+temperature_lower_harm = 2
 
 
 # _____________________________________________________________________________________________________________________
@@ -43,15 +46,16 @@ class Cell:
         self.X_History = np.array([self.X])
         self.Y_History = np.array([self.Y])
 
-        self.death_count = 500  # The Death count clock. All cells have it and it never stops ticking
+        self.death_count = 800  # The Death count clock. All cells have it and it never stops ticking
         self.death_count_rate = 1  # The minimum rate at which it ticks. Regardless of what the cell is doing.
 
         self.DX_energy = 0  # The Change in x and y coordinates to perform the move related to the Sensory model
         self.DY_energy = 0
         self.energy_level = 5  # This is the starting energy level of every cell that is created
-        self.energy_preference = 10  # The preferred value that all cells want their level to be at.
+        self.energy_preference = 5  # The preferred value that all cells want their level to be at.
         self.energy_experience = False
         self.energy_starved = False
+        self.energy_surplus = False
         self.energy_memory = False
 
         self.DX_temperature = 0  # The Change in x and y coordinates to perform the move related to the Sensory model
@@ -60,6 +64,7 @@ class Cell:
         self.temperature_preference = 5
         self.temperature_experience = False
         self.temperature_starved = False
+        self.temperature_surplus = False
         self.temperature_memory = False
 
         self.DX_background = 0
@@ -69,10 +74,18 @@ class Cell:
     def Death_Tick(self):
         # When this is called the Death Count will reduce for that cell by the Death count rate amount.
         # Keep in mind these functions are still within the class.
-        if self.energy_experience or self.temperature_experience:
-            self.death_count -= self.death_count_rate * .2
-        else:
-            self.death_count -= self.death_count_rate
+        self.death_count -= self.death_count_rate
+
+        #Check if any of the cells are in a surplus or starvation zone
+        if self.energy_level<energy_lower_harm:
+            self.death_count-=energy_lower_harm-self.energy_level
+        elif self.energy_level>energy_upper_harm:
+            self.death_count-=self.energy_level-energy_upper_harm
+
+        if self.temperature_level<temperature_lower_harm:
+            self.death_count-=temperature_lower_harm-self.temperature_level
+        elif self.temperature_level>temperature_upper_harm:
+            self.death_count-=self.temperature_level-temperature_upper_harm
 
     # When this is called the
     def Update_Background_Position(self, background_grid):
@@ -165,12 +178,9 @@ class Cell:
             possible_moves = background_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y + 2]
             possible_moves = possible_moves / np.sum(possible_moves)
 
-        weights = np.ravel(
-            possible_moves)  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
-        order = np.arange(0, weights.size,
-                          1)  # This is created the array which contains the order/indexing of the values of the pos move array
-        choice = random.choices(order,
-                                weights=weights)  # This selects a random value from order based off of the weight
+        weights = np.ravel(possible_moves)  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+        order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+        choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
         coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
         IX, IY = coordinates[0], coordinates[
             1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
@@ -394,55 +404,122 @@ class Cell:
                     IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame.
 
     def Update_Total_Position(self):
-        if self.energy_memory and self.temperature_memory:
-            if self.energy_starved is False and self.temperature_starved is False:
-                self.X = self.X + int(self.DX_background)
-                self.Y = self.Y + int(self.DY_background)
-            elif self.energy_starved and self.temperature_starved is False:
-                weights = np.array([.1,
-                                    .9])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
-                order = np.arange(0, weights.size,
-                                  1)  # This is created the array which contains the order/indexing of the values of the pos move array
-                choice = random.choices(order,
-                                        weights=weights)  # This selects a random value from order based off of the weight
+        #This is the logic for Starvation
+        if self.energy_starved is False and self.temperature_starved is False:
+
+            #This is the logic to run the proabability models for suprlus, in the event that you have too much energy only
+            if self.energy_surplus and self.energy_experience and self.temperature_surplus is False:
+                weights = np.array([.01, .99])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
                 if choice[0] == 0:
                     self.X = self.X + int(self.DX_background)
                     self.Y = self.Y + int(self.DY_background)
                 else:
-                    self.X = self.X + int(self.DX_energy)
-                    self.Y = self.Y + int(self.DY_energy)
-            elif self.energy_starved is False and self.temperature_starved:
-                weights = np.array([.1,
-                                    .9])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
-                order = np.arange(0, weights.size,
-                                  1)  # This is created the array which contains the order/indexing of the values of the pos move array
-                choice = random.choices(order,
-                                        weights=weights)  # This selects a random value from order based off of the weight
+                    self.X = self.X - int(self.DX_energy)
+                    self.Y = self.Y - int(self.DY_energy)
+            elif self.temperature_surplus and self.temperature_experience and self.energy_surplus is False:
+                weights = np.array([.01, .99])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
                 if choice[0] == 0:
                     self.X = self.X + int(self.DX_background)
                     self.Y = self.Y + int(self.DY_background)
                 else:
-                    self.X = self.X + int(self.DX_temperature)
-                    self.Y = self.Y + int(self.DY_temperature)
-            elif self.energy_starved and self.temperature_starved:
-                weights = np.array([.1, .45,
-                                    .45])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
-                order = np.arange(0, weights.size,
-                                  1)  # This is created the array which contains the order/indexing of the values of the pos move array
-                choice = random.choices(order,
-                                        weights=weights)  # This selects a random value from order based off of the weight
+                    self.X = self.X - int(self.DX_temperature)
+                    self.Y = self.Y - int(self.DY_temperature)
+            elif self.energy_surplus and self.energy_experience and self.temperature_surplus and self.temperature_experience:
+                weights = np.array([.02, .49, .49])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
                 if choice[0] == 0:
                     self.X = self.X + int(self.DX_background)
                     self.Y = self.Y + int(self.DY_background)
                 elif choice[0] == 1:
+                    self.X = self.X - int(self.DX_energy)
+                    self.Y = self.Y - int(self.DY_energy)
+                elif choice[0] == 2:
+                    self.X = self.X - int(self.DX_temperature)
+                    self.Y = self.Y - int(self.DY_temperature)
+            else:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+        elif self.energy_starved and self.energy_memory and self.temperature_starved is False:
+            #There is still a possiblity that the temperature may have a surplus in this feild
+            # Temp surplus logic is needed.
+
+            #This is the logic to run the proabability models for suprlus, in the event that you have too much energy only
+            if self.temperature_surplus and self.temperature_experience:
+                weights = np.array([.01, .45,.45])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                if choice[0] == 0:
+                    self.X = self.X + int(self.DX_background)
+                    self.Y = self.Y + int(self.DY_background)
+                elif choice[0] == 1:
+                    self.X = self.X - int(self.DX_temperature)
+                    self.Y = self.Y - int(self.DY_temperature)
+                elif choice[0] == 2:
                     self.X = self.X + int(self.DX_energy)
                     self.Y = self.Y + int(self.DY_energy)
-                elif choice[0] == 2:
+
+            else:
+                weights = np.array([.01, .99])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                if choice[0] == 0:
+                    self.X = self.X + int(self.DX_background)
+                    self.Y = self.Y + int(self.DY_background)
+                else:
+                    self.X = self.X + int(self.DX_energy)
+                    self.Y = self.Y + int(self.DY_energy)
+        elif self.temperature_starved and self.temperature_memory and self.energy_starved is False:
+
+
+            #This is the logic to run the proabability models for suprlus, in the event that you have too much energy only
+            if self.energy_surplus and self.energy_experience:
+                weights = np.array([.01, .45,.45])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                if choice[0] == 0:
+                    self.X = self.X + int(self.DX_background)
+                    self.Y = self.Y + int(self.DY_background)
+                elif choice[0] == 1:
                     self.X = self.X + int(self.DX_temperature)
                     self.Y = self.Y + int(self.DY_temperature)
+                elif choice[0] == 2:
+                    self.X = self.X - int(self.DX_energy)
+                    self.Y = self.Y - int(self.DY_energy)
+            else:
+                weights = np.array([.01, .99])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+                order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                if choice[0] == 0:
+                    self.X = self.X + int(self.DX_background)
+                    self.Y = self.Y + int(self.DY_background)
+                else:
+                    self.X = self.X + int(self.DX_temperature)
+                    self.Y = self.Y + int(self.DY_temperature)
+        elif self.energy_starved and self.temperature_starved and self.temperature_memory and self.energy_memory:
+            weights = np.array([.02, .49, .49])  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+            order = np.arange(0, weights.size, 1)  # This is created the array which contains the order/indexing of the values of the pos move array
+            choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+            elif choice[0] == 1:
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+            elif choice[0] == 2:
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
         else:
             self.X = self.X + int(self.DX_background)
             self.Y = self.Y + int(self.DY_background)
+        # if self.X < 0:
+        #     self.X=0
+        # if self.Y < 0:
+        #     self.Y=0
 
     def Add_History(self):
         self.X_History = np.hstack((self.X_History, self.X))
@@ -453,18 +530,22 @@ class Cell:
 
     def Update_Sensory_Level(self, energy_grid, temperature_grid):
         # Updating the Energy Level
-        if self.energy_experience:
+        if self.energy_experience and self.energy_level<upper_sensory_cap:
             self.energy_level += energy_grid[self.X, self.Y]
             self.energy_level -= energy_grid[self.X, self.Y] / 2
         else:
-            self.energy_level -= energy_decay_rate
+            if self.energy_level>lower_sensory_cap:
+                self.energy_level -= energy_decay_rate
+        self.energy_level=np.min([self.energy_level,upper_sensory_cap])
 
         # Updating the Temperature Level
-        if self.temperature_experience:
+        if self.temperature_experience and self.temperature_level<upper_sensory_cap:
             self.temperature_level += temperature_grid[self.X, self.Y]
             self.temperature_level -= temperature_grid[self.X, self.Y] / 2
         else:
-            self.temperature_level -= temperature_decay_rate
+            if self.temperature_level>lower_sensory_cap:
+                self.temperature_level -= temperature_decay_rate
+        self.temperature_level=np.min([self.temperature_level,upper_sensory_cap])
 
     def Update_Memory(self, energy_grid, temperature_grid):
 
@@ -504,19 +585,27 @@ class Cell:
 
     def Starvation_Check(self):
         # Check if cell is currently starved for each sense
-        if self.energy_level < energy_limit_lower:
+        if self.energy_level < energy_lower_harm:
             self.energy_starved = True
+        else:
+            self.energy_starved = False
 
-        if self.temperature_level < temperature_limit_lower:
+        if self.temperature_level < temperature_lower_harm:
             self.temperature_starved = True
+        else:
+            self.temperature_starved = False
 
     def Surplus_Check(self):
         # Check if cell is currently in surplus for each sense
-        if self.energy_level > energy_limit_upper:
+        if self.energy_level > energy_upper_harm:
             self.energy_surplus = True
+        else:
+            self.energy_surplus = False
 
-        if self.temperature_level > temperature_limit_upper:
+        if self.temperature_level > temperature_upper_harm:
             self.temperature_surplus = True
+        else:
+            self.temperature_surplus = False
 
     def Check_Memory(self):
         # Check if cell has memory of sensory input
@@ -576,14 +665,14 @@ def Create_Grid(grid_size):
 def Create_Sensory_Grid(grid_size, Sense):
     Sensory_Grid = np.zeros((grid_size, grid_size))
     if Sense == "Energy":
-        Source_Value = 25
-        X0 = int(grid_size / 2)
-        Y0 = int(grid_size / 2)
+        Source_Value = 15
+        X0 = int(grid_size / 1.5)
+        Y0 = int(grid_size / 6)
         Sensory_Grid[X0 - 2:X0 + 3, Y0 - 2:Y0 + 3] = Source_Value / 3
         Sensory_Grid[X0 - 1:X0 + 2, Y0 - 1:Y0 + 2] = Source_Value / 2
         Sensory_Grid[X0, Y0] = Source_Value
     elif Sense == "Temperature":
-        Source_Value = 25
+        Source_Value = 15
         X0 = int(grid_size / 3)
         Y0 = int(grid_size / 3)
         Sensory_Grid[X0 - 6:X0 + 7, Y0 - 6:Y0 + 7] = Source_Value / 7
@@ -612,7 +701,6 @@ for i in range(TF):
             Cell_List[j].Starvation_Check()
             if not Cell_List[j].energy_starved or not Cell_List[j].temperature_starved:
                 Cell_List[j].Surplus_Check()
-
             # Movement Models
             Cell_List[j].Update_Background_Position(Grid)
             if Cell_List[j].energy_starved:
@@ -649,9 +737,9 @@ ax1.set_ylim(-1, Grid_Size)
 ax2.set_xlim(-1, N)
 ax2.set_ylim(0, np.max(Death_Count_List))
 ax3.set_xlim(-1, N)
-ax3.set_ylim(0, np.max(Energy_List))
+ax3.set_ylim(np.min(Energy_List ), np.max(Energy_List))
 ax4.set_xlim(-1, N)
-ax4.set_ylim(0, np.max(Temp_List))
+ax4.set_ylim(np.min(Temp_List), np.max(Temp_List))
 ax3.set_xticks(idx_cells)
 ax2.set_xticks(idx_cells)
 ax4.set_xticks(idx_cells)
@@ -666,11 +754,11 @@ ax3.set_xticklabels(xlabels, rotation=50)
 ncol = [c for c in colors.get_named_colors_mapping()]
 
 # This creates the rectangles for the energy grid
-E_rect1 = patches.Rectangle((int(Grid_Size / 2) - 2, int(Grid_Size / 2) - 2), 5, 5, color='gold')
+E_rect1 = patches.Rectangle((int(Grid_Size / 1.5) - 2, int(Grid_Size / 6) - 2), 5, 5, color='gold')
 ax1.add_patch(E_rect1)
-E_rect2 = patches.Rectangle((int(Grid_Size / 2) - 1, int(Grid_Size / 2) - 1), 3, 3, color='orange')
+E_rect2 = patches.Rectangle((int(Grid_Size / 1.5) - 1, int(Grid_Size / 6) - 1), 3, 3, color='orange')
 ax1.add_patch(E_rect2)
-E_rect3 = patches.Rectangle((int(Grid_Size / 2), int(Grid_Size / 2)), 1, 1, color='darkorange')
+E_rect3 = patches.Rectangle((int(Grid_Size / 1.5), int(Grid_Size / 6)), 1, 1, color='darkorange')
 ax1.add_patch(E_rect3)
 # This creates the rectangles for the Temperature grid
 T_rect1 = patches.Rectangle((int(Grid_Size / 3) - 6, int(Grid_Size / 3) - 6), 13, 13, color=(1, .2, .2))
