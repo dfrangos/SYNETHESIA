@@ -8,36 +8,45 @@ import matplotlib.patches as patches
 # _____________________________________________________________________________________________________________________
 # USER DEFINED VARIABLES
 # The random Seed.
-np.random.seed(4844657)
+np.random.seed(48467)
 random.seed(10)
 # This is the size of the universe.
-Grid_Size = 30
+Grid_Size = 40
 # This is the amount of time the universe will exist for.
 TF = 600
 # The number of Cells that we want in the beginning of the simulation. This can change as the simulation progresses.
 N = 6
 
 # These are the decay rates experienced for all cells no matter what their personal properties are. This is universal
-upper_sensory_cap= 10
-lower_sensory_cap=0
+upper_sensory_cap = 10
+lower_sensory_cap = 0
 
-energy_decay_rate = .05
-energy_upper_harm = 8
-energy_lower_harm = 2
-energy_x_source= int(Grid_Size / 1.5)
-energy_y_source= int(Grid_Size / 6)
-
+food_decay_rate = .05
+food_upper_harm = 8
+food_lower_harm = 2
+food_x_source = int(Grid_Size / 1.5)
+food_y_source = int(Grid_Size / 6)
 
 temperature_decay_rate = .05
 temperature_upper_harm = 8
 temperature_lower_harm = 2
-temperature_x_source= int(Grid_Size / 3)
-temperature_y_source= int(Grid_Size / 3)
+temperature_x_source = int(Grid_Size / 3)
+temperature_y_source = int(Grid_Size / 3)
 
+water_decay_rate = .05
+water_upper_harm = 8
+water_lower_harm = 2
+water_x_source = int(Grid_Size / 3)
+water_y_source = int(Grid_Size / 3) + 14
 
+weight_b_s = np.array([0.01, 0.99])
+weight_b_s_s = np.array([0.01, 0.495, 0.495])
+weight_eq_3 = np.array([.01, .33, .33])
+source_value = 5
 
 # _____________________________________________________________________________________________________________________
 # Creating the Cells Properties. For now some of these are also user defined.
+
 
 class Cell:
     def __init__(self, X0, Y0, memory):
@@ -50,8 +59,9 @@ class Cell:
         # A array that is composed of all the global x and y coordinates
         self.X_History = np.array([self.X])
         self.Y_History = np.array([self.Y])
-        self.death_count = 800  # The Death count clock. All cells have it and it never stops ticking
+        self.death_count = 1000  # The Death count clock. All cells have it and it never stops ticking
         self.death_count_rate = 1  # The minimum rate at which it ticks. Regardless of what the cell is doing.
+
         self.DX_energy = 0  # The Change in x and y coordinates to perform the move related to the Sensory model
         self.DY_energy = 0
         self.energy_level = 5  # This is the starting energy level of every cell that is created
@@ -69,6 +79,16 @@ class Cell:
         self.temperature_starved = False
         self.temperature_surplus = False
         self.temperature_memory = False
+
+        self.DX_water = 0  # The Change in x and y coordinates to perform the move related to the Sensory model
+        self.DY_water = 0
+        self.water_level = 5  # This is the starting energy level of every cell that is created
+        self.water_preference = 5
+        self.water_experience = False
+        self.water_starved = False
+        self.water_surplus = False
+        self.water_memory = False
+
         self.DX_background = 0
         self.DY_background = 0
         self.memory_bank = memory  # when the cell is created it will have a memory bank filled with 'memory'. Which, for now, will be nothing.
@@ -78,18 +98,17 @@ class Cell:
         # Keep in mind these functions are still within the class.
         self.death_count -= self.death_count_rate
 
-        #Check if any of the cells are in a surplus or starvation zone
-        if self.energy_level<energy_lower_harm:
-            self.death_count-=energy_lower_harm-self.energy_level
-        elif self.energy_level>energy_upper_harm:
-            self.death_count-=self.energy_level-energy_upper_harm
+        # Check if any of the cells are in a surplus or starvation zone
+        if self.energy_level < food_lower_harm:
+            self.death_count -= food_lower_harm - self.energy_level
+        elif self.energy_level > food_upper_harm:
+            self.death_count -= self.energy_level - food_upper_harm
 
-        if self.temperature_level<temperature_lower_harm:
-            self.death_count-=temperature_lower_harm-self.temperature_level
-        elif self.temperature_level>temperature_upper_harm:
-            self.death_count-=self.temperature_level-temperature_upper_harm
+        if self.temperature_level < temperature_lower_harm:
+            self.death_count -= temperature_lower_harm-self.temperature_level
+        elif self.temperature_level > temperature_upper_harm:
+            self.death_count -= self.temperature_level-temperature_upper_harm
 
-    # When this is called the
     def Update_Background_Position(self, background_grid):
         # know what the dimensions of the universe are.
         grid_length = background_grid.shape[0]
@@ -124,7 +143,6 @@ class Cell:
             self.RY = 0
             possible_moves = background_grid[self.X:self.X + 2, self.Y:self.Y + 2]
             possible_moves = possible_moves / np.sum(possible_moves)
-
 
         # Top Right Corner    - No Right, No Down
         elif dont_look_right_flag and dont_look_down_flag:
@@ -191,9 +209,9 @@ class Cell:
         self.DY_background = (
                 IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame. (RY)
 
-    def Update_Energy_Position(self, energy_grid):
+    def Update_Sensory_Position(self, sensory_grid, sense):
         # know what the dimensions of the universe are.
-        grid_length = energy_grid.shape[0]
+        grid_length = sensory_grid.shape[0]
         # Check to see if the cell is on the border of the universe
 
         dont_look_left_flag = False  # X
@@ -223,80 +241,115 @@ class Cell:
         if dont_look_left_flag and dont_look_down_flag:
             self.RX = 0
             self.RY = 0
-            possible_moves = energy_grid[self.X:self.X + 2, self.Y:self.Y + 2]
+            possible_moves = sensory_grid[self.X:self.X + 2, self.Y:self.Y + 2]
 
         # Top Right Corner    - No Right, No Down
         elif dont_look_right_flag and dont_look_down_flag:
             self.RX = 0
             self.RY = 1
-            possible_moves = energy_grid[self.X:self.X + 2, self.Y - 1:self.Y]
+            possible_moves = sensory_grid[self.X:self.X + 2, self.Y - 1:self.Y]
 
         # Bottom Left Corner  - No left,  No Up
         elif dont_look_left_flag and dont_look_up_flag:
             self.RX = 1
             self.RY = 0
-            possible_moves = energy_grid[self.X - 1:self.X, self.Y:self.Y + 2]
+            possible_moves = sensory_grid[self.X - 1:self.X, self.Y:self.Y + 2]
 
         # Bottom Right Corner - No Right, No Up
         elif dont_look_right_flag and dont_look_up_flag:
             self.RX = 1
             self.RY = 1
-            possible_moves = energy_grid[self.X - 1:self.X, self.Y - 1:self.Y]
+            possible_moves = sensory_grid[self.X - 1:self.X, self.Y - 1:self.Y]
 
         # This is in the event that the cell is in the left column but not on the top and bottom
         elif dont_look_left_flag and not dont_look_down_flag and not dont_look_right_flag and not dont_look_up_flag:
             self.RX = 1
             self.RY = 0
-            possible_moves = energy_grid[self.X - 1:self.X + 2, self.Y:self.Y + 2]
+            possible_moves = sensory_grid[self.X - 1:self.X + 2, self.Y:self.Y + 2]
 
         # This is in the event that the cell is in the right column but not on the top and bottom
         elif dont_look_right_flag and not dont_look_down_flag and not dont_look_left_flag and not dont_look_up_flag:
             self.RX = 1
             self.RY = 1
-            possible_moves = energy_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y]
+            possible_moves = sensory_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y]
 
         # This is in the event that the cell is in the first row but not on the left and right corners
         elif dont_look_down_flag and not dont_look_up_flag and not dont_look_left_flag and not dont_look_right_flag:
             self.RX = 0
             self.RY = 1
-            possible_moves = energy_grid[self.X:self.X + 2, self.Y - 1:self.Y + 2]
+            possible_moves = sensory_grid[self.X:self.X + 2, self.Y - 1:self.Y + 2]
 
         # This is in the event that the cell is in the last row but not on the left and right corners
         elif dont_look_up_flag and not dont_look_down_flag and not dont_look_left_flag and not dont_look_right_flag:
             self.RX = 1
             self.RY = 1
-            possible_moves = energy_grid[self.X - 1:self.X, self.Y - 1:self.Y + 2]
+            possible_moves = sensory_grid[self.X - 1:self.X, self.Y - 1:self.Y + 2]
 
         else:
             self.RX = 1
             self.RY = 1
-            possible_moves = energy_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y + 2]
+            possible_moves = sensory_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y + 2]
 
-        if np.sum(possible_moves) < 1:
-            # Check memory bank to see if data exists for this sense
-            self.Check_Memory()
-            if self.energy_memory:
-                X, Y = self.Access_Memory('energy')
-                self.DX_energy = np.sign(X-self.X)
-                self.DY_energy = np.sign(Y-self.Y)
+        if sense == 'energy':
+            if np.sum(possible_moves) < 1:
+                # Check memory bank to see if data exists for this sense
+                self.Check_Memory()
+                if self.energy_memory:
+                    X, Y = self.Access_Memory(sense)
+                    self.DX_energy = np.sign(X-self.X)
+                    self.DY_energy = np.sign(Y-self.Y)
+                else:
+                    self.DX_energy, self.DY_energy = 0, 0
+
             else:
-                self.DX_energy, self.DY_energy = 0, 0
+                possible_moves = possible_moves / np.sum(possible_moves)
+                weights = np.ravel(possible_moves)
+                order = np.arange(0, weights.size, 1)
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
+                IX, IY = coordinates[0], coordinates[1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
+                self.DX_energy = (IX - self.RX)
+                self.DY_energy = (IY - self.RY)
+        elif sense == 'temperature':
+            if np.sum(possible_moves) < 1:
+                # Check memory bank to see if data exists for this sense
+                self.Check_Memory()
+                if self.energy_memory:
+                    X, Y = self.Access_Memory(sense)
+                    self.DX_temperature = np.sign(X-self.X)
+                    self.DY_temperature = np.sign(Y-self.Y)
+                else:
+                    self.DX_temperature, self.DY_temperature = 0, 0
 
-        else:
-            possible_moves = possible_moves / np.sum(possible_moves)
-            weights = np.ravel(
-                possible_moves)  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
-            order = np.arange(0, weights.size,
-                              1)  # This is created the array which contains the order/indexing of the values of the pos move array
-            choice = random.choices(order,
-                                    weights=weights)  # This selects a random value from order based off of the weight
-            coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
-            IX, IY = coordinates[0], coordinates[
-                1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
-            self.DX_energy = (
-                    IX - self.RX)  # The change in coordinates that cell needs to make is the difference between the target location (IX) and the current location of where the cell is in the relative frame. (RX)
-            self.DY_energy = (
-                    IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame.
+            else:
+                possible_moves = possible_moves / np.sum(possible_moves)
+                weights = np.ravel(possible_moves)
+                order = np.arange(0, weights.size, 1)
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
+                IX, IY = coordinates[0], coordinates[1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
+                self.DX_temperature = (IX - self.RX)
+                self.DY_temperature = (IY - self.RY)
+        elif sense == 'water':
+            if np.sum(possible_moves) < 1:
+                # Check memory bank to see if data exists for this sense
+                self.Check_Memory()
+                if self.energy_memory:
+                    X, Y = self.Access_Memory(sense)
+                    self.DX_water = np.sign(X-self.X)
+                    self.DY_water = np.sign(Y-self.Y)
+                else:
+                    self.DX_water, self.DY_water = 0, 0
+
+            else:
+                possible_moves = possible_moves / np.sum(possible_moves)
+                weights = np.ravel(possible_moves)
+                order = np.arange(0, weights.size, 1)
+                choice = random.choices(order, weights=weights)  # This selects a random value from order based off of the weight
+                coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
+                IX, IY = coordinates[0], coordinates[1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
+                self.DX_water = (IX - self.RX)
+                self.DY_water = (IY - self.RY)
 
     def Update_Temperature_Position(self, temperature_grid):
         # know what the dimensions of the universe are.
@@ -406,6 +459,152 @@ class Cell:
                     IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame.
 
     def Update_Total_Position(self):
+        # t_surp    t_starv     e_surp      e_starv     w_surp      w_starv
+        #   T           F          F            F          F           F
+        #   F           T          F            F          F           F
+        #   F           F          T            F          F           F
+        #   F           F          F            T          F           F
+        #   T           F          T            F          F           F
+        #   T           F          F            T          F           F
+        #   F           T          T            F          F           F
+        #   F           T          F            T          F           F..done
+        #   T           F          F            F          T           T
+        #   F           T          F            F          T           T
+        #   F           F          T            F          T           T
+        #   F           F          F            T          T           T
+        #   T           F          T            F          T           T
+        #   T           F          F            T          T           T
+        #   F           T          T            F          T           T
+        #   F           T          F            T          T           T
+
+        if self.energy_starved is False and self.energy_surplus is False and self.temperature_surplus and self.temperature_experience and self.water_surplus is False and self.water_starved is False:
+            # temperature surplus
+            weights = weight_b_s
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+            else:
+                self.DX_temperature = np.sign(self.X - temperature_x_source)
+                self.DY_temperature = np.sign(self.Y - temperature_y_source)
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
+
+        elif self.energy_starved is False and self.energy_surplus is False and self.temperature_starved and self.temperature_memory and self.water_surplus is False and self.water_starved is False:
+            # temperature starved
+            weights = weight_b_s
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+            else:
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
+
+        elif self.temperature_starved is False and self.temperature_surplus is False and self.energy_surplus and self.energy_experience and self.water_surplus is False and self.water_starved is False:
+            # energy surplus
+            weights = weight_b_s
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+            else:
+                self.DX_energy = np.sign(self.X - food_x_source)
+                self.DY_energy = np.sign(self.Y - food_y_source)
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+
+        elif self.temperature_starved is False and self.temperature_surplus is False and self.energy_starved and self.energy_memory and self.water_surplus is False and self.water_starved is False:
+            # energy starved
+            weights = weight_b_s
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+            else:
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+
+        elif self.temperature_surplus and self.temperature_experience and self.energy_surplus and self.energy_experience and self.water_surplus is False and self.water_starved is False:
+            # temperature surplus and energy surplus (rare condition, grids shouldnt overlap)
+            weights = np.array([.5,.5])
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.DX_energy = np.sign(self.X - food_x_source)
+                self.DY_energy = np.sign(self.Y - food_y_source)
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+            else:
+                self.DX_temperature = np.sign(self.X - temperature_x_source)
+                self.DY_temperature = np.sign(self.Y - temperature_y_source)
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
+
+        elif self.temperature_surplus and self.temperature_experience and self.energy_starved and self.energy_memory and self.water_surplus is False and self.water_starved is False:
+            # temperature surplus and energy starved
+            weights = np.array([.5,.5])
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+            else:
+                self.DX_temperature = np.sign(self.X - temperature_x_source)
+                self.DY_temperature = np.sign(self.Y - temperature_y_source)
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
+
+        elif self.temperature_starved and self.temperature_memory and self.energy_surplus and self.energy_experience and self.water_surplus is False and self.water_starved is False:
+            # temperature starved and energy surplus
+            weights = weight_b_s_s
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.DX_energy = np.sign(self.X - food_x_source)
+                self.DY_energy = np.sign(self.Y - food_y_source)
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+            elif choice[0] == 1:
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
+            else:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+
+        elif self.temperature_starved and self.temperature_memory and self.energy_starved and self.energy_memory and self.water_surplus is False and self.water_starved is False:
+            # temperature starved and energy starved
+            weights = weight_b_s_s
+            order = np.arange(0, weights.size, 1)
+            choice = random.choices(order, weights=weights)
+            if choice[0] == 0:
+                self.X = self.X + int(self.DX_energy)
+                self.Y = self.Y + int(self.DY_energy)
+            elif choice[0] == 1:
+                self.X = self.X + int(self.DX_temperature)
+                self.Y = self.Y + int(self.DY_temperature)
+            else:
+                self.X = self.X + int(self.DX_background)
+                self.Y = self.Y + int(self.DY_background)
+
+        else:
+            self.X = self.X + int(self.DX_background)
+            self.Y = self.Y + int(self.DY_background)
+
+        if self.X < 1:
+            self.X = 1
+        elif self.X > Grid_Size-1:
+            self.X = Grid_Size-1
+        if self.Y < 1:
+            self.Y = 1
+        elif self.Y > Grid_Size - 1:
+            self.Y = Grid_Size - 1
+
+        """
         #This is the logic for Starvation
         if self.energy_starved is False:
             #This is the logic to run the proabability models for suprlus, in the event that you have too much energy only
@@ -417,8 +616,8 @@ class Cell:
                     self.X = self.X + int(self.DX_background)
                     self.Y = self.Y + int(self.DY_background)
                 else:
-                    self.DX_energy = np.sign(self.X - energy_x_source)
-                    self.DY_energy = np.sign(self.Y - energy_y_source)
+                    self.DX_energy = np.sign(self.X - food_x_source)
+                    self.DY_energy = np.sign(self.Y - food_y_source)
                     self.X = self.X + int(self.DX_energy)
                     self.Y = self.Y + int(self.DY_energy)
             elif self.temperature_surplus and self.temperature_experience and self.energy_surplus is False:
@@ -441,8 +640,8 @@ class Cell:
                     self.X = self.X + int(self.DX_background)
                     self.Y = self.Y + int(self.DY_background)
                 elif choice[0] == 1:
-                    self.DX_energy = np.sign(self.X - energy_x_source)
-                    self.DY_energy = np.sign(self.Y - energy_y_source)
+                    self.DX_energy = np.sign(self.X - food_x_source)
+                    self.DY_energy = np.sign(self.Y - food_y_source)
                     self.X = self.X + int(self.DX_energy)
                     self.Y = self.Y + int(self.DY_energy)
                 elif choice[0] == 2:
@@ -531,6 +730,7 @@ class Cell:
         #     self.X=0
         # if self.Y < 0:
         #     self.Y=0
+        """
 
     def Add_History(self):
         self.X_History = np.hstack((self.X_History, self.X))
@@ -546,7 +746,7 @@ class Cell:
             self.energy_level -= energy_grid[self.X, self.Y] / 2
         else:
             if self.energy_level>lower_sensory_cap:
-                self.energy_level -= energy_decay_rate
+                self.energy_level -= food_decay_rate
         self.energy_level=np.min([self.energy_level,upper_sensory_cap])
 
         # Updating the Temperature Level
@@ -596,7 +796,7 @@ class Cell:
 
     def Starvation_Check(self):
         # Check if cell is currently starved for each sense
-        if self.energy_level < energy_lower_harm:
+        if self.energy_level < food_lower_harm:
             self.energy_starved = True
         else:
             self.energy_starved = False
@@ -608,7 +808,7 @@ class Cell:
 
     def Surplus_Check(self):
         # Check if cell is currently in surplus for each sense
-        if self.energy_level > energy_upper_harm:
+        if self.energy_level > food_upper_harm:
             self.energy_surplus = True
         else:
             self.energy_surplus = False
@@ -675,33 +875,36 @@ def Create_Grid(grid_size):
 # Creates an array of an energy grid and defines its location and its values
 def Create_Sensory_Grid(grid_size, Sense):
     Sensory_Grid = np.zeros((grid_size, grid_size))
+    s_grid_length = 0
     if Sense == "Energy":
-        Source_Value = 15
-        X0 = energy_x_source
-        Y0 = energy_y_source
-        Sensory_Grid[X0 - 2:X0 + 3, Y0 - 2:Y0 + 3] = Source_Value / 3
-        Sensory_Grid[X0 - 1:X0 + 2, Y0 - 1:Y0 + 2] = Source_Value / 2
-        Sensory_Grid[X0, Y0] = Source_Value
+        X0 = food_x_source
+        Y0 = food_y_source
+        s_grid_length = 3
+        for i in range(s_grid_length-1, -1, -1):
+            Sensory_Grid[X0 - i:X0 + i + 1, Y0 - i:Y0 + i + 1] = source_value / (i + 1)
     elif Sense == "Temperature":
-        Source_Value = 15
         X0 = temperature_x_source
         Y0 = temperature_y_source
-        Sensory_Grid[X0 - 6:X0 + 7, Y0 - 6:Y0 + 7] = Source_Value / 7
-        Sensory_Grid[X0 - 5:X0 + 6, Y0 - 5:Y0 + 6] = Source_Value / 6
-        Sensory_Grid[X0 - 4:X0 + 5, Y0 - 4:Y0 + 5] = Source_Value / 5
-        Sensory_Grid[X0 - 3:X0 + 4, Y0 - 3:Y0 + 4] = Source_Value / 4
-        Sensory_Grid[X0 - 2:X0 + 3, Y0 - 2:Y0 + 3] = Source_Value / 3
-        Sensory_Grid[X0 - 1:X0 + 2, Y0 - 1:Y0 + 2] = Source_Value / 2
-        Sensory_Grid[X0, Y0] = Source_Value
-    return Sensory_Grid
+        s_grid_length = 7
+        for i in range(s_grid_length - 1, -1, -1):
+            Sensory_Grid[X0 - i:X0 + i + 1, Y0 - i:Y0 + i + 1] = source_value / (i + 1)
+    elif Sense == 'Water':
+        X0 = water_x_source
+        Y0 = water_y_source
+        s_grid_length = 7
+        for i in range(s_grid_length - 1, -1, -1):
+            Sensory_Grid[X0 - i:X0 + i + 1, Y0 - i:Y0 + i + 1] = source_value / (i + 1)
+    return Sensory_Grid, s_grid_length
 
 
 Cell_List = Create_Cells(N, Grid_Size)
-Energy_Grid = Create_Sensory_Grid(Grid_Size, "Energy")
-Temperature_Grid = Create_Sensory_Grid(Grid_Size, "Temperature")
+Energy_Grid, e_grid_len = Create_Sensory_Grid(Grid_Size, "Energy")
+Temperature_Grid, t_grid_len = Create_Sensory_Grid(Grid_Size, "Temperature")
+Water_Grid, w_grid_len = Create_Sensory_Grid(Grid_Size, "Water")
 Death_Count_List = np.zeros((N, TF))
 Energy_List = np.zeros((N, TF))
 Temp_List = np.zeros((N, TF))
+Water_List = np.zeros((N, TF))
 for i in range(TF):
     Grid = Create_Grid(Grid_Size)
     for j in range(N):
@@ -713,10 +916,12 @@ for i in range(TF):
             # Movement Models
             Cell_List[j].Surplus_Check()
             Cell_List[j].Update_Background_Position(Grid)
-            if Cell_List[j].energy_starved:
-                Cell_List[j].Update_Energy_Position(Energy_Grid)
-            if Cell_List[j].temperature_starved:
-                Cell_List[j].Update_Temperature_Position(Temperature_Grid)
+            if Cell_List[j].energy_starved and Cell_List[j].energy_memory:
+                Cell_List[j].Update_Sensory_Position(Energy_Grid, 'energy')
+            if Cell_List[j].temperature_starved and Cell_List[j].temperature_memory:
+                Cell_List[j].Update_Sensory_Position(Temperature_Grid, 'temperature')
+            if Cell_List[j].water_starved and Cell_List[j].water_memory:
+                Cell_List[j].Update_Sensory_Position(Water_Grid, 'water')
             Cell_List[j].Update_Total_Position()
 
             Cell_List[j].Add_History()
@@ -726,6 +931,7 @@ for i in range(TF):
         Death_Count_List[j, i] = Cell_List[j].death_count
         Energy_List[j, i] = Cell_List[j].energy_level
         Temp_List[j, i] = Cell_List[j].temperature_level
+        Water_List[j, i] = Cell_List[j].water_level
 
 
     print(i)
@@ -736,11 +942,12 @@ for i in range(TF):
 # Doing the Animation
 idx_cells = np.asarray([i for i in range(N)])
 fig, axd = plt.subplot_mosaic([['upper left', 'grid'],
-                               ['mid left', 'grid'],
+                               ['mid1 left', 'grid'],
+                               ['mid2 left', 'grid'],
                                ['lower left', 'grid']],
                               figsize=(5.5, 3.5))
 plt.tight_layout(pad=2)
-ax1, ax2, ax3, ax4 = axd["grid"], axd["upper left"], axd["lower left"], axd['mid left']
+ax1, ax2, ax3, ax4, ax5 = axd["grid"], axd["upper left"], axd["lower left"], axd['mid1 left'], axd['mid2 left']
 # Set the axis limits
 ax1.set_xlim(-1, Grid_Size)
 ax1.set_ylim(-1, Grid_Size)
@@ -750,9 +957,12 @@ ax3.set_xlim(-1, N)
 ax3.set_ylim(np.min(Energy_List ), np.max(Energy_List))
 ax4.set_xlim(-1, N)
 ax4.set_ylim(np.min(Temp_List), np.max(Temp_List))
+ax5.set_xlim(-1, N)
+ax5.set_ylim(np.min(Temp_List), np.max(Water_List))
 ax3.set_xticks(idx_cells)
 ax2.set_xticks(idx_cells)
 ax4.set_xticks(idx_cells)
+ax5.set_xticks(idx_cells)
 prefs = []
 for i in range(N):
     prefs.append(str(Cell_List[i].energy_preference))
@@ -764,36 +974,44 @@ ax3.set_xticklabels(xlabels, rotation=50)
 ncol = [c for c in colors.get_named_colors_mapping()]
 
 # This creates the rectangles for the energy grid
-E_rect1 = patches.Rectangle((int(Grid_Size / 1.5) - 2, int(Grid_Size / 6) - 2), 5, 5, color='gold')
+E_rect1 = patches.Rectangle((food_x_source - 2, food_y_source - 2), 5, 5, color='gold')
 ax1.add_patch(E_rect1)
-E_rect2 = patches.Rectangle((int(Grid_Size / 1.5) - 1, int(Grid_Size / 6) - 1), 3, 3, color='orange')
+E_rect2 = patches.Rectangle((food_x_source - 1, food_y_source - 1), 3, 3, color='orange')
 ax1.add_patch(E_rect2)
-E_rect3 = patches.Rectangle((int(Grid_Size / 1.5), int(Grid_Size / 6)), 1, 1, color='darkorange')
+E_rect3 = patches.Rectangle((food_x_source, food_y_source), 1, 1, color='darkorange')
 ax1.add_patch(E_rect3)
 # This creates the rectangles for the Temperature grid
-T_rect1 = patches.Rectangle((int(Grid_Size / 3) - 6, int(Grid_Size / 3) - 6), 13, 13, color=(1, .2, .2))
+T_rect1 = patches.Rectangle((temperature_x_source - 6, temperature_y_source - 6), 13, 13, color=(1, .2, .2))
 ax1.add_patch(T_rect1)
-T_rect2 = patches.Rectangle((int(Grid_Size / 3) - 5, int(Grid_Size / 3) - 5), 11, 11, color=(.9, .2, .2))
+T_rect2 = patches.Rectangle((temperature_x_source - 5, temperature_y_source - 5), 11, 11, color=(.9, .2, .2))
 ax1.add_patch(T_rect2)
-T_rect3 = patches.Rectangle((int(Grid_Size / 3) - 4, int(Grid_Size / 3) - 4), 9, 9, color=(.8, .2, .2))
+T_rect3 = patches.Rectangle((temperature_x_source - 4, temperature_y_source - 4), 9, 9, color=(.8, .2, .2))
 ax1.add_patch(T_rect3)
-T_rect4 = patches.Rectangle((int(Grid_Size / 3) - 3, int(Grid_Size / 3) - 3), 7, 7, color=(.7, .2, .2))
+T_rect4 = patches.Rectangle((temperature_x_source - 3, temperature_y_source - 3), 7, 7, color=(.7, .2, .2))
 ax1.add_patch(T_rect4)
-T_rect5 = patches.Rectangle((int(Grid_Size / 3) - 2, int(Grid_Size / 3) - 2), 5, 5, color=(.6, .2, .2))
+T_rect5 = patches.Rectangle((temperature_x_source - 2, temperature_y_source - 2), 5, 5, color=(.6, .2, .2))
 ax1.add_patch(T_rect5)
-T_rect6 = patches.Rectangle((int(Grid_Size / 3) - 1, int(Grid_Size / 3) - 1), 3, 3, color=(.5, .2, .2))
+T_rect6 = patches.Rectangle((temperature_x_source - 1, temperature_y_source - 1), 3, 3, color=(.5, .2, .2))
 ax1.add_patch(T_rect6)
-T_rect7 = patches.Rectangle((int(Grid_Size / 3), int(Grid_Size / 3)), 1, 1, color=(.4, .2, .2))
+T_rect7 = patches.Rectangle((temperature_x_source, temperature_y_source), 1, 1, color=(.4, .2, .2))
 ax1.add_patch(T_rect7)
+# This creates the rectangles for the water grid
+W_rect1 = patches.Rectangle((water_x_source - 2, water_y_source - 2), 5, 5, color='deepskyblue')
+ax1.add_patch(W_rect1)
+W_rect2 = patches.Rectangle((water_x_source - 1, water_y_source - 1), 3, 3, color='dodgerblue')
+ax1.add_patch(W_rect2)
+W_rect3 = patches.Rectangle((water_x_source, water_y_source), 1, 1, color='blue')
+ax1.add_patch(W_rect3)
 
 ax1.grid(which="both")
 ax1.minorticks_on()
 ax2.set_title('death count')
 ax3.set_title('energy levels')
 ax4.set_title('temp levels')
+ax5.set_title('water levels')
 
 
-def update(num, lines, Cell_List, bars, Bar_List, energy, Energy_List, temps, Temp_List):
+def update(num, lines, Cell_List, bars, Bar_List, energy, Energy_List, temps, Temp_List, waters, Water_List):
     if num > 5:
         for i in range(N):
             lines[i].set_data(Cell_List[i].X_History[num - 5:num], Cell_List[i].Y_History[num - 5:num])
@@ -811,15 +1029,21 @@ def update(num, lines, Cell_List, bars, Bar_List, energy, Energy_List, temps, Te
     ax1.add_patch(T_rect6)
     ax1.add_patch(T_rect7)
 
-    # This adds in the Energy rectangle every loop so they dont disapear.
+    # This adds in the Food rectangle every loop so they dont disapear.
     ax1.add_patch(E_rect1)
     ax1.add_patch(E_rect2)
     ax1.add_patch(E_rect3)
+
+    # This adds in the Water rectangle every loop so they dont disapear.
+    ax1.add_patch(W_rect1)
+    ax1.add_patch(W_rect2)
+    ax1.add_patch(W_rect3)
 
     for i in range(N):
         bars[i].set_height(Bar_List[i, num])
         energy[i].set_height(Energy_List[i, num])
         temps[i].set_height(Temp_List[i, num])
+        waters[i].set_height(Water_List[i, num])
 
 
 # Creates an empty list of the line items that will be used to do the animation
@@ -827,6 +1051,7 @@ line_list = []
 energy_list = []
 bar_list = []
 temp_list = []
+water_list = []
 for i in range(N):
     g, = ax1.plot([], [], marker='*')
     line_list.append(g)
@@ -836,10 +1061,12 @@ for i in range(N):
     energy_list.append(g)
     g, = ax4.bar(i, 0)
     temp_list.append(g)
+    g, = ax5.bar(i, 0)
+    water_list.append(g)
 
 # Create the animation using the update function
 anim = animation.FuncAnimation(fig, update,
-                               fargs=(line_list, Cell_List, bar_list, Death_Count_List, energy_list, Energy_List, temp_list, Temp_List),
+                               fargs=(line_list, Cell_List, bar_list, Death_Count_List, energy_list, Energy_List, temp_list, Temp_List, water_list, Water_List),
                                interval=50, frames=TF, repeat=True)
 # Show the animation
 
