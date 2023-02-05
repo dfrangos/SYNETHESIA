@@ -351,112 +351,112 @@ class Cell:
                 self.DX_water = (IX - self.RX)
                 self.DY_water = (IY - self.RY)
 
-    def Update_Temperature_Position(self, temperature_grid):
-        # know what the dimensions of the universe are.
-        grid_length = temperature_grid.shape[0]
-        # Check to see if the cell is on the border of the universe
-
-        dont_look_left_flag = False  # X
-        dont_look_right_flag = False  # X
-        dont_look_down_flag = False  # Y
-        dont_look_up_flag = False  # Y
-        # Cant look to the left flag of X
-        if self.X == 0:
-            dont_look_down_flag = True
-
-        # Cant look to the right flag of X
-        if self.X == grid_length - 1:
-            dont_look_up_flag = True
-
-        # Cant look down flag of X
-        if self.Y == 0:
-            dont_look_left_flag = True
-
-        # Cant look up flag of X
-        if self.Y == grid_length - 1:
-            dont_look_right_flag = True
-
-        # In the instance where all flags are False
-
-        # In a Corner Cases
-        # Top Left Corner     - No down,  No left
-        if dont_look_left_flag and dont_look_down_flag:
-            self.RX = 0
-            self.RY = 0
-            possible_moves = temperature_grid[self.X:self.X + 2, self.Y:self.Y + 2]
-
-        # Top Right Corner    - No Right, No Down
-        elif dont_look_right_flag and dont_look_down_flag:
-            self.RX = 0
-            self.RY = 1
-            possible_moves = temperature_grid[self.X:self.X + 2, self.Y - 1:self.Y]
-
-        # Bottom Left Corner  - No left,  No Up
-        elif dont_look_left_flag and dont_look_up_flag:
-            self.RX = 1
-            self.RY = 0
-            possible_moves = temperature_grid[self.X - 1:self.X, self.Y:self.Y + 2]
-
-        # Bottom Right Corner - No Right, No Up
-        elif dont_look_right_flag and dont_look_up_flag:
-            self.RX = 1
-            self.RY = 1
-            possible_moves = temperature_grid[self.X - 1:self.X, self.Y - 1:self.Y]
-
-        # This is in the event that the cell is in the left column but not on the top and bottom
-        elif dont_look_left_flag and not dont_look_down_flag and not dont_look_right_flag and not dont_look_up_flag:
-            self.RX = 1
-            self.RY = 0
-            possible_moves = temperature_grid[self.X - 1:self.X + 2, self.Y:self.Y + 2]
-
-        # This is in the event that the cell is in the right column but not on the top and bottom
-        elif dont_look_right_flag and not dont_look_down_flag and not dont_look_left_flag and not dont_look_up_flag:
-            self.RX = 1
-            self.RY = 1
-            possible_moves = temperature_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y]
-
-        # This is in the event that the cell is in the first row but not on the left and right corners
-        elif dont_look_down_flag and not dont_look_up_flag and not dont_look_left_flag and not dont_look_right_flag:
-            self.RX = 0
-            self.RY = 1
-            possible_moves = temperature_grid[self.X:self.X + 2, self.Y - 1:self.Y + 2]
-
-        # This is in the event that the cell is in the last row but not on the left and right corners
-        elif dont_look_up_flag and not dont_look_down_flag and not dont_look_left_flag and not dont_look_right_flag:
-            self.RX = 1
-            self.RY = 1
-            possible_moves = temperature_grid[self.X - 1:self.X, self.Y - 1:self.Y + 2]
-
-        else:
-            self.RX = 1
-            self.RY = 1
-            possible_moves = temperature_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y + 2]
-
-        if np.sum(possible_moves) < 1:
-            # Check memory bank to see if data exists for this sense
-            self.Check_Memory()
-            if self.energy_memory:
-                X, Y = self.Access_Memory('temperature')
-                self.DX_temperature = np.sign(X - self.X)
-                self.DY_temperature = np.sign(Y - self.Y)
-            else:
-                self.DX_temperature, self.DY_temperature = 0, 0
-
-        else:
-            possible_moves = possible_moves / np.sum(possible_moves)
-            weights = np.ravel(
-                possible_moves)  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
-            order = np.arange(0, weights.size,
-                              1)  # This is created the array which contains the order/indexing of the values of the pos move array
-            choice = random.choices(order,
-                                    weights=weights)  # This selects a random value from order based off of the weight
-            coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
-            IX, IY = coordinates[0], coordinates[
-                1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
-            self.DX_temperature = (
-                    IX - self.RX)  # The change in coordinates that cell needs to make is the difference between the target location (IX) and the current location of where the cell is in the relative frame. (RX)
-            self.DY_temperature = (
-                    IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame.
+    # def Update_Temperature_Position(self, temperature_grid):
+    #     # know what the dimensions of the universe are.
+    #     grid_length = temperature_grid.shape[0]
+    #     # Check to see if the cell is on the border of the universe
+    #
+    #     dont_look_left_flag = False  # X
+    #     dont_look_right_flag = False  # X
+    #     dont_look_down_flag = False  # Y
+    #     dont_look_up_flag = False  # Y
+    #     # Cant look to the left flag of X
+    #     if self.X == 0:
+    #         dont_look_down_flag = True
+    #
+    #     # Cant look to the right flag of X
+    #     if self.X == grid_length - 1:
+    #         dont_look_up_flag = True
+    #
+    #     # Cant look down flag of X
+    #     if self.Y == 0:
+    #         dont_look_left_flag = True
+    #
+    #     # Cant look up flag of X
+    #     if self.Y == grid_length - 1:
+    #         dont_look_right_flag = True
+    #
+    #     # In the instance where all flags are False
+    #
+    #     # In a Corner Cases
+    #     # Top Left Corner     - No down,  No left
+    #     if dont_look_left_flag and dont_look_down_flag:
+    #         self.RX = 0
+    #         self.RY = 0
+    #         possible_moves = temperature_grid[self.X:self.X + 2, self.Y:self.Y + 2]
+    #
+    #     # Top Right Corner    - No Right, No Down
+    #     elif dont_look_right_flag and dont_look_down_flag:
+    #         self.RX = 0
+    #         self.RY = 1
+    #         possible_moves = temperature_grid[self.X:self.X + 2, self.Y - 1:self.Y]
+    #
+    #     # Bottom Left Corner  - No left,  No Up
+    #     elif dont_look_left_flag and dont_look_up_flag:
+    #         self.RX = 1
+    #         self.RY = 0
+    #         possible_moves = temperature_grid[self.X - 1:self.X, self.Y:self.Y + 2]
+    #
+    #     # Bottom Right Corner - No Right, No Up
+    #     elif dont_look_right_flag and dont_look_up_flag:
+    #         self.RX = 1
+    #         self.RY = 1
+    #         possible_moves = temperature_grid[self.X - 1:self.X, self.Y - 1:self.Y]
+    #
+    #     # This is in the event that the cell is in the left column but not on the top and bottom
+    #     elif dont_look_left_flag and not dont_look_down_flag and not dont_look_right_flag and not dont_look_up_flag:
+    #         self.RX = 1
+    #         self.RY = 0
+    #         possible_moves = temperature_grid[self.X - 1:self.X + 2, self.Y:self.Y + 2]
+    #
+    #     # This is in the event that the cell is in the right column but not on the top and bottom
+    #     elif dont_look_right_flag and not dont_look_down_flag and not dont_look_left_flag and not dont_look_up_flag:
+    #         self.RX = 1
+    #         self.RY = 1
+    #         possible_moves = temperature_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y]
+    #
+    #     # This is in the event that the cell is in the first row but not on the left and right corners
+    #     elif dont_look_down_flag and not dont_look_up_flag and not dont_look_left_flag and not dont_look_right_flag:
+    #         self.RX = 0
+    #         self.RY = 1
+    #         possible_moves = temperature_grid[self.X:self.X + 2, self.Y - 1:self.Y + 2]
+    #
+    #     # This is in the event that the cell is in the last row but not on the left and right corners
+    #     elif dont_look_up_flag and not dont_look_down_flag and not dont_look_left_flag and not dont_look_right_flag:
+    #         self.RX = 1
+    #         self.RY = 1
+    #         possible_moves = temperature_grid[self.X - 1:self.X, self.Y - 1:self.Y + 2]
+    #
+    #     else:
+    #         self.RX = 1
+    #         self.RY = 1
+    #         possible_moves = temperature_grid[self.X - 1:self.X + 2, self.Y - 1:self.Y + 2]
+    #
+    #     if np.sum(possible_moves) < 1:
+    #         # Check memory bank to see if data exists for this sense
+    #         self.Check_Memory()
+    #         if self.energy_memory:
+    #             X, Y = self.Access_Memory('temperature')
+    #             self.DX_temperature = np.sign(X - self.X)
+    #             self.DY_temperature = np.sign(Y - self.Y)
+    #         else:
+    #             self.DX_temperature, self.DY_temperature = 0, 0
+    #
+    #     else:
+    #         possible_moves = possible_moves / np.sum(possible_moves)
+    #         weights = np.ravel(
+    #             possible_moves)  # Ravels the posisble moves array and uses their normalized values as a weight for the probability choice.
+    #         order = np.arange(0, weights.size,
+    #                           1)  # This is created the array which contains the order/indexing of the values of the pos move array
+    #         choice = random.choices(order,
+    #                                 weights=weights)  # This selects a random value from order based off of the weight
+    #         coordinates = np.unravel_index(choice, possible_moves.shape)  # returns the unraveled index of the choice.
+    #         IX, IY = coordinates[0], coordinates[
+    #             1]  # Assigns the first value of that tuple to the X and the second for the Y coordinate of the local array.
+    #         self.DX_temperature = (
+    #                 IX - self.RX)  # The change in coordinates that cell needs to make is the difference between the target location (IX) and the current location of where the cell is in the relative frame. (RX)
+    #         self.DY_temperature = (
+    #                 IY - self.RY)  # The change in coordinates that cell needs to make is the difference between the target location (IY) and the current location of where the cell is in the relative frame.
 
     def Update_Total_Position(self):
         # t_surp    t_starv     e_surp      e_starv     w_surp      w_starv
@@ -468,14 +468,24 @@ class Cell:
         #   T           F          F            T          F           F
         #   F           T          T            F          F           F
         #   F           T          F            T          F           F..done
-        #   T           F          F            F          T           T
-        #   F           T          F            F          T           T
-        #   F           F          T            F          T           T
-        #   F           F          F            T          T           T
-        #   T           F          T            F          T           T
-        #   T           F          F            T          T           T
-        #   F           T          T            F          T           T
-        #   F           T          F            T          T           T
+        #
+        #   T           F          F            F          T           F
+        #   F           T          F            F          T           F
+        #   F           F          T            F          T           F
+        #   F           F          F            T          T           F
+        #   T           F          T            F          T           F
+        #   T           F          F            T          T           F
+        #   F           T          T            F          T           F
+        #   F           T          F            T          T           F
+        #
+        #   T           F          F            F          F           T
+        #   F           T          F            F          F           T
+        #   F           F          T            F          F           T
+        #   F           F          F            T          F           T
+        #   T           F          T            F          F           T
+        #   T           F          F            T          F           T
+        #   F           T          T            F          F           T
+        #   F           T          F            T          F           T
 
         if self.energy_starved is False and self.energy_surplus is False and self.temperature_surplus and self.temperature_experience and self.water_surplus is False and self.water_starved is False:
             # temperature surplus
